@@ -1,0 +1,32 @@
+{
+  "notes": "Protocol-inspired subgroup scenario set",
+  "scenarios": [
+    {
+      "name": "null",
+      "n_total": 400,
+      "prevalence": 0.3,
+      "lambda_control": 0.12,
+      "hr_pos": 1.0,
+      "hr_neg": 1.0,
+      "censor_rate": 0.05
+    },
+    {
+      "name": "subgroup_mild",
+      "n_total": 400,
+      "prevalence": 0.3,
+      "lambda_control": 0.12,
+      "hr_pos": 0.8,
+      "hr_neg": 1.0,
+      "censor_rate": 0.05
+    },
+    {
+      "name": "subgroup_strong",
+      "n_total": 400,
+      "prevalence": 0.3,
+      "lambda_control": 0.12,
+      "hr_pos": 0.7,
+      "hr_neg": 1.0,
+      "censor_rate": 0.05
+    }
+  ]
+}

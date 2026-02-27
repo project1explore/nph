@@ -1,0 +1,107 @@
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[numbers]{natbib}
+\title{Full-Grid Subgroup Simulation Study under Marginal Non-Proportional Hazards}
+\author{NPH Project}
+\date{\today}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We report a complete subgroup-scenario simulation study covering all protocol-grid combinations (1296 scenario cells, 200 replications per cell). Non-proportional hazards are induced at the marginal arm level by subgroup-mixture effects. We provide full-grid visualizations, one-factor-at-a-time (OFAT) slices for interpretability, and scenario-level recovery artifacts enabling exact lookup of each scenario result.
+\end{abstract}
+
+\section{Introduction}
+Comparative performance of survival methods under non-proportional hazards (NPH) depends on the estimand and data-generating assumptions \citep{morris2019}. In subgroup contexts, marginal NPH can arise even when subgroup-level hazards are proportional. This paper presents full-grid evidence and an interpretation strategy that balances completeness and scenario-level recoverability.
+
+\section{Methods}
+\subsection{Data-generating process}
+For control, $S_0(t)=\exp(-\lambda_0 t)$. For treatment,
+\begin{align}
+S_1(t)=p\exp(-\lambda_0 HR_{+} t)+(1-p)\exp(-\lambda_0 HR_{-} t).
+\end{align}
+Thus hazards are proportional within subgroup but non-proportional marginally after mixing over biomarker status.
+
+\subsection{Protocol grid and simulation size}
+The grid varies baseline hazard (3), censoring level (3), prevalence (3), overall effect-size level (4), subgroup-relative effect-size level (3), and sample size (4: 300/500/1000/1500), for $3\times3\times3\times4\times3\times4=1296$ cells. Each cell uses 200 replications.
+
+\subsection{Estimands and methods}
+RMST estimand at horizon $\tau$:
+\begin{align}
+\Delta_R(\tau)=\int_0^{\tau}\{S_1(u)-S_0(u)\}\,du,\qquad \tau\in\{6,12\}\text{ months}.
+\end{align}
+Methods include log-rank, FH-weighted log-rank family, MaxCombo (Bonferroni minimum-$p$ approximation), Cox PH, and RMST tests. AHR is estimated over observed support $t_{\max}=\max_i T_i$ when applicable.
+
+\subsection{Scenario recoverability}
+Every scenario is assigned a deterministic \texttt{scenario\_id} in \texttt{results/scenario\_dictionary.csv}. Full outputs are provided in wide and long formats:
+\texttt{scenario\_metrics\_wide.csv} and \texttt{scenario\_metrics\_long.csv}. OFAT slices are provided in \texttt{results/ofat\_*.csv}.
+
+\section{Results}
+\subsection{Complete full-grid view (all results shown)}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_protocol_full/fig_allrows_methods_scatter.png}
+\caption{All 1296 scenario-cell results plotted for all testing methods (no scenario omission).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_protocol_full/fig_allmethods_heatmap_n_hr.png}
+\caption{Full-grid method heatmaps aggregated over sample size and overall effect-size axes.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_protocol_full/fig_bias_distributions_allrows.png}
+\caption{Bias distributions across all scenario cells.}
+\end{figure}
+
+\subsection{One-factor-at-a-time slices for interpretability}
+Reference scenario used for OFAT plots: $n=500$, $\lambda_0=0.057762$, censoring$=0.1$, prevalence$=0.3$, $hr_{overall}=0.8$, relative effect$=0.8$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_protocol_full/fig_ofat_rejection.png}
+\caption{OFAT rejection-rate profiles: each panel varies one factor while others remain at the reference scenario.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_protocol_full/fig_ofat_bias.png}
+\caption{OFAT bias profiles for key estimators.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{rrrrrrr}
+\toprule
+Sample size & Log-rank rej & MaxCombo rej & Cox rej & RMST12 rej & Cox bias & RMST12 bias \\
+\midrule
+300 & 0.385 & 0.314 & 0.383 & 0.204 & -0.0096 & -0.0002 \\
+500 & 0.493 & 0.430 & 0.492 & 0.282 & -0.0125 & 0.0006 \\
+1000 & 0.610 & 0.565 & 0.610 & 0.406 & -0.0140 & -0.0010 \\
+1500 & 0.669 & 0.630 & 0.669 & 0.478 & -0.0151 & 0.0005 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Summary by per-replication sample size (all other factors averaged).}
+\end{table}
+
+\section{Discussion}
+The full-grid analysis confirms strong scenario dependence: no single method dominates uniformly. RMST methods remain interpretable under marginal NPH, while weighted log-rank variants and MaxCombo provide improved detection in many non-proportional settings. OFAT slices greatly improve recoverability and practical interpretation compared with fully aggregated displays alone.
+
+\section{Conclusions}
+The study now combines (i) full-grid completeness, (ii) explicit scenario recoverability via scenario IDs and supplementary CSVs, and (iii) OFAT interpretation plots. This combination supports both transparency and decision-oriented reading.
+
+\nocite{*}
+\bibliographystyle{plainnat}
+\bibliography{references}
+\end{document}

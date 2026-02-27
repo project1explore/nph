@@ -1,0 +1,12 @@
+{
+  "n_sims": 6000,
+  "reject_overall": 0.1525,
+  "reject_pos": 0.3596666666666667,
+  "reject_neg": 0.052833333333333336,
+  "reject_interaction": 0.2715,
+  "mean_logrr_overall": -0.11376363019908294,
+  "mean_events": 277.67883333333333,
+  "scenario": "subgroup_strong",
+  "elapsed_sec": 109.14007472991943,
+  "cores": 2
+}

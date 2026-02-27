@@ -1,0 +1,38 @@
+[
+  {
+    "n_sims": 6000,
+    "reject_overall": 0.05683333333333333,
+    "reject_pos": 0.052333333333333336,
+    "reject_neg": 0.051166666666666666,
+    "reject_interaction": 0.048666666666666664,
+    "mean_logrr_overall": 0.0007624950646636516,
+    "mean_events": 282.4121666666667,
+    "scenario": "null",
+    "elapsed_sec": 109.02983236312866,
+    "cores": 2
+  },
+  {
+    "n_sims": 6000,
+    "reject_overall": 0.08616666666666667,
+    "reject_pos": 0.1725,
+    "reject_neg": 0.050833333333333335,
+    "reject_interaction": 0.142,
+    "mean_logrr_overall": -0.07008630625084573,
+    "mean_events": 279.3686666666667,
+    "scenario": "subgroup_mild",
+    "elapsed_sec": 108.2790880203247,
+    "cores": 2
+  },
+  {
+    "n_sims": 6000,
+    "reject_overall": 0.1525,
+    "reject_pos": 0.3596666666666667,
+    "reject_neg": 0.052833333333333336,
+    "reject_interaction": 0.2715,
+    "mean_logrr_overall": -0.11376363019908294,
+    "mean_events": 277.67883333333333,
+    "scenario": "subgroup_strong",
+    "elapsed_sec": 109.14007472991943,
+    "cores": 2
+  }
+]
