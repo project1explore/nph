@@ -130,10 +130,10 @@ strict_table = None
 size_threshold = 0.055
 eligible_methods = strict_methods[:]
 all_primary_pass_screen = False
-winner_methods = strict_methods[:]
-winner_title = 'Winner frequency among primary methods'
-winner_caption = 'Winner frequency among primary methods across alternative cells.'
-winner_takeaway_lead = 'Among primary methods, top winner shares were'
+winner_methods = methods_all[:]
+winner_title = 'Winner frequency across all compared methods'
+winner_caption = 'Winner frequency across all compared methods over alternative cells.'
+winner_takeaway_lead = 'Across all compared methods, top winner shares were'
 strict_reps_desc = 'recorded replications per scenario'
 strict_reps_caption = 'recorded reps/scenario'
 if strict is not None:
@@ -153,17 +153,6 @@ if strict is not None:
     })
     eligible_methods = [m for m in strict_methods if strict[m].max() <= size_threshold]
     all_primary_pass_screen = len(eligible_methods) == len(strict_methods)
-
-    if all_primary_pass_screen:
-        winner_methods = eligible_methods[:]
-        winner_title = f'Winner frequency among size-screened methods (max strict-null size <= {size_threshold:.3f})'
-        winner_caption = f'Winner frequency among size-screened methods only (all primary methods met max strict-null size <= {size_threshold:.3f}).'
-        winner_takeaway_lead = 'Among size-screened methods, top winner shares were'
-    else:
-        winner_methods = strict_methods[:]
-        winner_title = f'Winner frequency among primary methods (strict-null screen at {size_threshold:.3f} not uniformly met)'
-        winner_caption = f'Winner frequency among primary methods. A strict-null screen at {size_threshold:.3f} was not applied because at least one primary method exceeded the threshold.'
-        winner_takeaway_lead = 'Among primary methods, top winner shares were'
 
 # -----------------------------
 # Figure 1: DGP sanity
@@ -340,7 +329,7 @@ alt_w = alt.copy()
 alt_w['winner'] = alt_w[winner_methods].idxmax(axis=1)
 win_prop = alt_w.groupby(['hr_overall', 'winner']).size().unstack(fill_value=0)
 win_prop = win_prop.div(win_prop.sum(axis=1), axis=0)
-win_prop = win_prop[[c for c in winner_methods if c in win_prop.columns]]
+win_prop = win_prop.reindex(columns=winner_methods, fill_value=0.0)
 
 plt.figure(figsize=(9.5, 5))
 bottom = np.zeros(len(win_prop))
@@ -396,7 +385,7 @@ if strict is not None:
             f"{r.cens_prop:.1f} & {r.mean_censor_frac:.3f} & {r.mean_censor_frac_arm0:.3f} & {r.mean_censor_frac_arm1:.3f} \\\\" 
         )
 
-# takeaways
+# key summary statistics used in manuscript narrative/tables
 q_null_logrank = null_proxy['logrank_p_reject'].mean()
 q_null_fh01 = null_proxy['wlr_fh01_p_reject'].mean()
 q_null_rmst12 = null_proxy['rmst12_p_reject'].mean()
@@ -416,10 +405,20 @@ else:
 
 winner_share = (alt_w['winner'].value_counts(normalize=True) * 100).to_dict()
 win_top = sorted(winner_share.items(), key=lambda kv: -kv[1])[:3]
+win_top_text = ', '.join([f"{labels_map[k]} {v:.1f}\\%" for k, v in win_top])
 
 nph_q10 = alt['nph_range'].quantile(0.1)
 nph_q90 = alt['nph_range'].quantile(0.9)
 fh_corr = np.corrcoef(alt['nph_range'], alt['fh01_gain_vs_logrank'])[0, 1]
+
+method_table_rows = [
+    r'Log-rank & \texttt{survival::survdiff} chi-square test (1 df) & Reference global rank-based comparison; strongest when departures from PH are mild. ' + r'\\',
+    r'FH weighted log-rank (0,0), (0,1), (1,1), (1,0) & Weighted observed-minus-expected with Greenwood-type variance \citep{harrington1982,fleming1991,magirr2019} & Sensitivity to early/late and crossing-pattern alternatives. ' + r'\\',
+    r'MaxCombo (primary) & \texttt{nph::logrank.maxtest} with multiplicity-adjusted \texttt{pmult} over FH components \citep{ristl2021} & Correlation-aware omnibus decision when NPH shape is uncertain. ' + r'\\',
+    r'Bonferroni minimum-\(p\) (optional reference) & Minimum \(p\) across same FH components with Bonferroni adjustment & Conservative sensitivity benchmark; not the primary decision rule. ' + r'\\',
+    r'Cox PH & \texttt{survival::coxph} Wald test with Efron ties \citep{cox1972} & Familiar semiparametric comparator under potential NPH misspecification. ' + r'\\',
+    r'RMST(6), RMST(12) & \texttt{survRM2::rmst2} unadjusted two-group tests \citep{uno2014,cho2021} & Time-horizon specific contrasts with direct clinical interpretation. ' + r'\\',
+]
 
 # -----------------------------
 # Manuscript text
@@ -429,7 +428,7 @@ if strict is not None:
     strict_null_section = rf'''
 \subsection{{Strict-null size benchmark}}
 To address strict type-I-error questions, we ran an additional benchmark under $HR_+=HR_-=1$ (true equal-survival null), using 6 representative scenarios and {strict_reps_desc}.
-Across primary methods, mean strict-null rejection was {q_strict_logrank:.4f} (log-rank), {q_strict_maxcombo:.4f} (MaxCombo), and {q_strict_rmst12:.4f} (RMST12), all close to nominal 0.05 within Monte Carlo uncertainty.
+Across primary methods, mean strict-null rejection was {q_strict_logrank:.4f} (log-rank), {q_strict_maxcombo:.4f} (MaxCombo with \texttt{{nph::logrank.maxtest}} \texttt{{pmult}}), and {q_strict_rmst12:.4f} (RMST12), all close to nominal 0.05 within Monte Carlo uncertainty.
 
 \begin{{figure}}[H]
 \centering
@@ -469,7 +468,10 @@ if strict is not None:
         methods_note = f"All primary methods satisfied strict-null worst-case rejection <= {size_threshold:.3f}."
     else:
         kept = ', '.join([labels_map[m] for m in eligible_methods]) if len(eligible_methods) > 0 else 'none'
-        methods_note = f"Strict-null worst-case rejection <= {size_threshold:.3f} was met by: {kept}. Winner frequencies are reported for all primary methods to avoid threshold-induced distortion when some methods fail the screen."
+        methods_note = (
+            f"At a descriptive strict-null screen of <= {size_threshold:.3f}, the methods meeting the threshold were: {kept}. "
+            "Figure 7 still reports winner frequencies across all compared methods to maintain a neutral comparison frame."
+        )
 else:
     methods_note = "Strict-null benchmark file was unavailable."
 
@@ -482,86 +484,81 @@ tex = rf'''
 \usepackage{{graphicx}}
 \usepackage{{float}}
 \usepackage[numbers]{{natbib}}
-\title{{Latent-Mixture-Induced Marginal NPH: A Full-Grid Simulation Comparison of Survival Methods}}
+\title{{Latent-Mixture-Induced Marginal NPH: A Full-Grid Neutral Comparison of Survival Methods}}
 \author{{NPH Project}}
 \date{{\today}}
 \begin{{document}}
 \maketitle
 
 \begin{{abstract}}
-We evaluate common two-arm survival comparison methods under non-proportional hazards induced by latent subgroup mixture. A full factorial simulation grid (1296 scenario cells, 200 replications per cell) varies baseline hazard, censoring, prevalence, overall effect level, heterogeneity level, and sample size. To support inferential calibration, we add a strict-null benchmark ({strict_reps_desc}). Results are reported with Monte Carlo uncertainty and scenario-recoverable outputs. Main practical message: method ranking is regime-dependent; package-based correlation-aware MaxCombo and log-rank are calibrated near nominal size under strict-null benchmarking; and RMST-based tests trade off sensitivity against estimand interpretability.
+We compare commonly used two-arm survival methods under non-proportional hazards induced by latent subgroup mixture. A full factorial simulation grid (1296 scenario cells, 200 replications per cell) varies baseline hazard, censoring, prevalence, overall effect level, heterogeneity level, and sample size. To anchor inferential calibration, we include a strict-null benchmark ({strict_reps_desc}). The analysis is deliberately neutral across method classes and emphasizes design transparency, Monte Carlo precision, and scenario-level recoverability. Main findings are that performance ranking depends on regime, log-rank and package-based MaxCombo remain near nominal strict-null rejection within Monte Carlo uncertainty, and RMST procedures offer interpretable time-horizon contrasts with context-dependent power trade-offs.
 \end{{abstract}}
 
 \section{{Introduction}}
-When biomarker heterogeneity exists but the biomarker is not used in primary analysis, treatment-arm survival may exhibit marginal non-proportional hazards (NPH) even if subgroup hazards are proportional. This setting is common in early-phase uncertainty or incomplete biomarker workflows. Our scientific target is the \emph{{marginal overall treatment comparison}} (not subgroup effect estimation). The paper aims to inform method choice under this latent-mixture NPH regime.
+Non-proportional hazards (NPH) arise in many oncology and precision-medicine settings where subgroup-specific treatment effects differ but subgroup membership is not used in primary analysis. In that situation, marginal arm-level survival may be non-proportional even when each latent subgroup follows proportional hazards. This creates a practical methodological problem: trial teams often need a single global two-arm comparison, but no single test uniformly dominates across all plausible NPH shapes.
 
-Methodological options for NPH are broad: weighted log-rank families and related FH classes \citep{{harrington1982,fleming1991,magirr2019}}, correlation-aware MaxCombo combinations \citep{{ristl2021}}, RMST-based estimands and tests \citep{{uno2014,cho2021}}, weighted Cox/average hazard ratio formulations \citep{{schemper2009}}, and flexible parametric survival modeling alternatives \citep{{royston2002}}. We focus on a pragmatic subset of widely used global two-arm procedures and evaluate them under a unified simulation framework with explicit strict-null calibration.
+The literature provides several complementary NPH strategies. Weighted log-rank procedures, including Fleming--Harrington (FH) classes, target different time regions of the survival curve and can gain sensitivity when effects are delayed, early, or crossing \citep{{harrington1982,fleming1991,magirr2019}}. Combination tests such as MaxCombo aggregate multiple FH components using covariance-aware multiplicity adjustment \citep{{ristl2021}}. RMST-based procedures move inference toward finite-horizon estimands that can be clinically interpretable \citep{{uno2014,cho2021}}. Weighted-Cox and average hazard ratio approaches address non-collapsibility and time-varying hazard ratio structure from a model-based perspective \citep{{schemper2009}}, while flexible parametric models provide alternative shape-adaptive frameworks for survival dynamics \citep{{royston2002}}.
+
+The objective of this paper is to provide a neutral methodological comparison for latent-mixture-induced marginal NPH in overall-arm inference. We do not advocate a single universal winner. Instead, we compare a pragmatic set of widely used global procedures under one simulation protocol, add a strict-null benchmark to separate calibration from power behavior, and preserve scenario recoverability so any summary can be traced back to exact design cells. The reporting structure follows simulation-study transparency principles \citep{{morris2019}}.
 
 \section{{Methods}}
-\subsection{{Data-generating process and parameter mapping}}
-Biomarker prevalence levels were 0.1, 0.3, and 0.5. Control hazard levels (per month) were $\log(2)/36$, $\log(2)/12$, and $\log(2)/6$. Total sample sizes were 300, 500, 1000, and 1500 (1:1 randomization). Treatment subgroup hazards are parameterized by
+\subsection{{Data-generating process and simulation grid}}
+We considered biomarker prevalence values $p\in\{{0.1,0.3,0.5\}}$, control hazards $\lambda_0\in\{{\log(2)/36,\log(2)/12,\log(2)/6\}}$ per month, censoring targets $c\in\{{0,0.1,0.3\}}$, overall design levels $HR_{{overall}}\in\{{1.0,0.9,0.8,0.7\}}$, heterogeneity levels $r\in\{{0.9,0.8,0.7\}}$, and total sample sizes $n_{{total}}\in\{{300,500,1000,1500\}}$ under 1:1 randomization. Treatment subgroup hazard ratios were mapped as
 \begin{{align}}
 HR_+ &= HR_{{overall}}\times r, \\
 HR_- &= \frac{{HR_{{overall}}-p\,HR_+}}{{1-p}},
 \end{{align}}
-where $HR_{{overall}}\in\{{1.0,0.9,0.8,0.7\}}$ and heterogeneity level $r\in\{{0.9,0.8,0.7\}}$.
-Thus $p\,HR_+ + (1-p)\,HR_- = HR_{{overall}}$, where $HR_{{overall}}$ is a \emph{{design control parameter}} (not a marginal causal estimand).
+so that $p\,HR_+ + (1-p)\,HR_- = HR_{{overall}}$. Here $HR_{{overall}}$ is a design-control quantity and not a marginal causal estimand.
 
-Control and treatment survival are
+Control and treatment survival were generated as
 \begin{{align}}
 S_0(t)&=\exp(-\lambda_0 t), \\
-S_1(t)&=p\exp(-\lambda_0 HR_+ t)+(1-p)\exp(-\lambda_0 HR_- t).
+S_1(t)&=p\exp(-\lambda_0 HR_+ t)+(1-p)\exp(-\lambda_0 HR_- t),
 \end{{align}}
-This induces marginal NPH via mixture.
+which induces marginal NPH through latent subgroup mixture. Independent exponential censoring used $\lambda_C = \frac{{c}}{{1-c}}\lambda_0$. No accrual or administrative cutoff was imposed in the main grid. RMST horizons were prespecified at $\tau=6$ and $\tau=12$ months to represent short- and medium-term windows relative to the design medians.
 
-\subsection{{Censoring and follow-up}}
-Independent exponential censoring is used:
-\begin{{align}}
-C\sim \mathrm{{Exp}}(\lambda_C), \qquad \lambda_C=\frac{{c}}{{1-c}}\lambda_0,
-\end{{align}}
-with target levels $c\in\{{0,0.1,0.3\}}$. No accrual or administrative cutoff is imposed in the main grid. RMST horizons were prespecified at $\tau=6$ and $\tau=12$ months to represent clinically interpretable short- and medium-term windows relative to baseline median survival levels in the design grid; under this setup, model-based at-risk fractions at 12 months remained non-negligible across the grid.
+\subsection{{Compared methods and implementation}}
+All tests were two-sided with nominal $\alpha=0.05$. Weighted log-rank components used pooled Kaplan--Meier weights $w(t)=\hat S(t)^\rho(1-\hat S(t))^\gamma$ for FH pairs $(0,0)$, $(0,1)$, $(1,1)$, and $(1,0)$. MaxCombo was implemented with \texttt{{nph::logrank.maxtest}} and treated as primary through the correlation-aware multiplicity-adjusted \texttt{{pmult}} output; Bonferroni minimum-\(p\) over the same FH components was retained only as an optional conservative reference. Table~\ref{{tab:methods}} summarizes all implementation choices.
 
-\subsection{{Methods, hypotheses, and implementation details}}
-All tests are two-sided with nominal $\alpha=0.05$.
-\begin{{itemize}}
-  \item Log-rank: \texttt{{survival::survdiff}} chi-square p-value (1 df).
-  \item FH weighted log-rank: pooled KM weights $w(t)=\hat S(t)^\rho(1-\hat S(t))^\gamma$ \citep{{harrington1982,magirr2019}}. Weight pairs used: $(0,0)$, $(0,1)$, $(1,1)$, and $(1,0)$. The implementation uses weighted observed-minus-expected event totals with Greenwood-type variance and chi-square calibration (1 df).
-  \item MaxCombo (primary): correlation-aware implementation via \texttt{{nph::logrank.maxtest}} with FH weights $(0,0)$, $(0,1)$, $(1,1)$, and $(1,0)$; the primary p-value is the multiplicity-adjusted \texttt{{pmult}} from the joint covariance-based combination \citep{{ristl2021}}.
-  \item Optional reference: Bonferroni minimum-$p$ over the same four FH components is reported when available as a conservative sensitivity benchmark (not the primary decision rule).
-  \item Cox PH: \texttt{{survival::coxph}} Wald p-value with Efron ties \citep{{cox1972}}.
-  \item RMST tests: \texttt{{survRM2::rmst2}} unadjusted two-group comparison at $\tau\in\{{6,12\}}$ \citep{{uno2014,cho2021}}.
-\end{{itemize}}
+\begin{{table}}[H]
+\centering
+\small
+\begin{{tabularx}}{{\textwidth}}{{p{{0.24\textwidth}} p{{0.38\textwidth}} X}}
+\toprule
+Method family & Implementation in simulations & Role in the comparison \\
+\midrule
+{chr(10).join(method_table_rows)}
+\bottomrule
+\end{{tabularx}}
+\caption{{Methods included in the neutral comparison framework.}}
+\label{{tab:methods}}
+\end{{table}}
 
-\paragraph{{On estimands.}}
-RMST effects target $\Delta_R(\tau)=\int_0^\tau(S_1-S_0)$. Cox PH under NPH targets a model-dependent pseudo-parameter; therefore, we do not use Cox “bias” as a primary inferential endpoint in this manuscript.
+\subsection{{Inferential targets, calibration, and Monte Carlo precision}}
+RMST contrasts target $\Delta_R(\tau)=\int_0^\tau\{{S_1(t)-S_0(t)\}}dt$. Under NPH, Cox estimates correspond to model-dependent summary parameters, so Cox effect-bias metrics were not treated as primary inferential targets. With $R=200$ replications per design cell, rejection-probability uncertainty was summarized by $MCSE(\hat p)=\sqrt{{\hat p(1-\hat p)/R}}$, and bias uncertainty by $MCSE(\widehat{{bias}})=\sqrt{{\max(MSE-bias^2,0)/R}}$.
 
-\subsection{{Monte Carlo uncertainty}}
-With $R=200$ per grid cell,
-\begin{{align}}
-MCSE(\hat p)=\sqrt{{\hat p(1-\hat p)/R}}.
-\end{{align}}
-For bias summaries, $MCSE(\widehat{{bias}})=\sqrt{{\max(MSE-bias^2,0)/R}}$.
+To isolate strict type-I-error behavior, we added a dedicated strict-null benchmark with $HR_+=HR_-=1$ over six representative scenarios. This benchmark is interpreted separately from design-baseline cells with $HR_{{overall}}=1$ and $r<1$, where latent-mixture NPH may still induce detectable marginal differences.
 
-\subsection{{Protocol coverage and recoverability}}
-The grid has $3\times3\times3\times4\times3\times4=1296$ cells. Each cell has deterministic \texttt{{scenario\_id}}. Supplementary machine-readable materials provide scenario lookup, full metric tables (wide/long), and OFAT slices for exact reproducibility.
+\subsection{{Recoverability outputs}}
+The full grid contains $3\times3\times3\times4\times3\times4=1296$ scenario cells, each with deterministic \texttt{{scenario\_id}} indexing. We export machine-readable scenario dictionaries, wide/long metric tables, and one-factor-at-a-time (OFAT) slices, enabling exact reconstruction of all reported summaries from stored artifacts.
 
 \section{{Results}}
-\subsection{{DGP diagnostics and NPH severity}}
+\subsection{{Marginal NPH diagnostics and strict-null calibration}}
 \begin{{figure}}[H]
 \centering
 \includegraphics[width=0.98\textwidth]{{figures_protocol_full/fig1_dgp_sanity.png}}
 \caption{{Representative scenarios: survival curves (top) and implied marginal $HR(t)$ (bottom).}}
 \end{{figure}}
 
-In alternative cells, the NPH-severity index $\max_t HR(t)-\min_t HR(t)$ had 10th and 90th percentiles {nph_q10:.4f} and {nph_q90:.4f}, respectively.
+Figure~1 confirms that latent subgroup mixing can generate visibly non-proportional marginal hazards, including time-varying attenuation and crossing patterns, despite proportional subgroup hazards by construction. Across alternative cells, the NPH-severity index $\max_t HR(t)-\min_t HR(t)$ had 10th and 90th percentiles {nph_q10:.4f} and {nph_q90:.4f}, indicating substantial heterogeneity in departure from proportionality across the design.
 
 {strict_null_section}
 
-\subsection{{Power across alternative cells}}
+\subsection{{Alternative-cell performance profiles}}
 \begin{{figure}}[H]
 \centering
 \includegraphics[width=0.9\textwidth]{{figures_protocol_full/fig3_power_boxplot.png}}
-\caption{{Power distributions across alternative cells ($HR_{{overall}}<1$).}}
+\caption{{Rejection distributions across alternative cells ($HR_{{overall}}<1$).}}
 \end{{figure}}
 
 \begin{{figure}}[H]
@@ -573,13 +570,13 @@ In alternative cells, the NPH-severity index $\max_t HR(t)-\min_t HR(t)$ had 10t
 \begin{{figure}}[H]
 \centering
 \includegraphics[width=0.98\textwidth]{{figures_protocol_full/fig5_ofat_rejection_mcse.png}}
-\caption{{OFAT rejection profiles around reference scenario ($n=500$, $\lambda_0=\log(2)/12$, $c=0.1$, $p=0.3$, $HR_{{overall}}=0.8$, $r=0.8$).}}
+\caption{{OFAT rejection profiles around the reference scenario ($n=500$, $\lambda_0=\log(2)/12$, $c=0.1$, $p=0.3$, $HR_{{overall}}=0.8$, $r=0.8$).}}
 \end{{figure}}
 
 \begin{{figure}}[H]
 \centering
 \includegraphics[width=0.98\textwidth]{{figures_protocol_full/fig6_ofat_bias_mcse.png}}
-\caption{{OFAT RMST bias profiles with MC uncertainty.}}
+\caption{{OFAT RMST bias profiles with Monte Carlo uncertainty bands.}}
 \end{{figure}}
 
 \begin{{figure}}[H]
@@ -591,7 +588,7 @@ In alternative cells, the NPH-severity index $\max_t HR(t)-\min_t HR(t)$ had 10t
 \begin{{figure}}[H]
 \centering
 \includegraphics[width=0.9\textwidth]{{figures_protocol_full/fig8_nph_gain_scatter.png}}
-\caption{{FH(0,1) gain vs log-rank as a function of NPH-severity index.}}
+\caption{{FH(0,1) gain vs. log-rank as a function of the NPH-severity index.}}
 \end{{figure}}
 
 \begin{{table}}[H]
@@ -609,28 +606,29 @@ Sample size & Log-rank & FH(0,1) & MaxCombo & Cox PH & RMST12 \\
 \caption{{Mean rejection by sample size over alternative cells only ($HR_{{overall}}<1$).}}
 \end{{table}}
 
-\subsection{{Quantitative takeaways}}
-\begin{{itemize}}
-\item Design-baseline cells ($HR_{{overall}}=1$ with heterogeneity levels $r<1$) had mean rejection rates {q_null_logrank:.3f} (log-rank), {q_null_fh01:.3f} (FH(0,1)), and {q_null_rmst12:.3f} (RMST12); these are \emph{{not}} strict type-I error estimates.
-\item Strict-null benchmark means were {q_strict_logrank:.4f} (log-rank), {q_strict_maxcombo:.4f} (MaxCombo, \texttt{{pmult}}), and {q_strict_rmst12:.4f} (RMST12); these primary models were calibrated near nominal level within Monte Carlo uncertainty.{bonf_note}
-\item {methods_note}
-\item {winner_takeaway_lead}: {', '.join([f"{labels_map[k]} {v:.1f}%" for k,v in win_top])}.
-\item FH(0,1) gain vs log-rank correlated positively with NPH severity (correlation {fh_corr:.3f}).
-\end{{itemize}}
+Figures~3--6 show that relative method performance changes with effect size, sample size, censoring, and heterogeneity structure. Figure~7 reports winner frequencies computed across \emph{{all}} compared methods, rather than filtered subsets, so the ranking summary remains neutral with respect to any pre-screening rule. The leading winner shares across all compared methods were {win_top_text}. Figure~8 indicates that FH(0,1) gain over log-rank increases with NPH severity (correlation {fh_corr:.3f}), consistent with late-weight emphasis under stronger time-varying separation.
+
+\subsection{{Quantitative synthesis in prose}}
+Design-baseline cells ($HR_{{overall}}=1$ with $r<1$) yielded mean rejection rates of {q_null_logrank:.3f} for log-rank, {q_null_fh01:.3f} for FH(0,1), and {q_null_rmst12:.3f} for RMST(12); these values are descriptive operating characteristics and are not strict type-I-error estimates.
+
+In the dedicated strict-null benchmark, mean rejection rates were {q_strict_logrank:.4f} for log-rank, {q_strict_maxcombo:.4f} for MaxCombo based on \texttt{{nph::logrank.maxtest}} \texttt{{pmult}}, and {q_strict_rmst12:.4f} for RMST(12). These primary methods remained near the nominal 0.05 level within Monte Carlo uncertainty.{bonf_note} {methods_note}
 
 \section{{Practical recommendations}}
-For latent-mixture marginal NPH without biomarker adjustment in primary analysis:
-\begin{{enumerate}}
-\item Use log-rank and package-based MaxCombo (\texttt{{nph::logrank.maxtest}} with \texttt{{pmult}}) as robust global tests when NPH shape is uncertain; both were near nominal strict-null size in this benchmark.
-\item FH-weighted and Cox-type procedures remain useful complements for regime-specific sensitivity profiling, but should be interpreted alongside strict-null calibration.
-\item If clinically interpretable time-horizon estimands are needed, RMST summaries are useful, with $\tau$ prespecified and checked against follow-up support.
-\end{{enumerate}}
+For overall-arm inference under latent-mixture NPH, a pragmatic default is to pair log-rank with package-based MaxCombo (\texttt{{nph::logrank.maxtest}} using \texttt{{pmult}}) when the time-profile of treatment effect is uncertain. This pairing balances interpretability and robustness while preserving strict-null calibration in this benchmark.
+
+FH-weighted and Cox analyses are best treated as complementary sensitivity lenses that help characterize regime dependence rather than as universal replacements. When decision-making requires direct clinical interpretation on a fixed horizon, RMST summaries at prespecified $\tau$ values are useful, provided follow-up support at that horizon is checked and reported.
 
 \section{{Discussion}}
-This work is not a subgroup-analysis-method paper; it is a latent-mixture marginal-NPH comparison for overall-arm inference. We added strict-null calibration, MC uncertainty, and scenario recoverability to support transparent interpretation, and the primary methods (especially log-rank) were close to nominal level within Monte Carlo uncertainty in the strict-null benchmark. Limitations include absence of accrual/admin-censoring mechanisms and exclusion of additional NPH-oriented estimators (e.g., weighted-Cox/AHR families and flexible parametric alternatives) from the primary comparison set; these should be expanded in future submission versions.
+The objective of this study was to compare multiple NPH approaches for marginal overall-arm inference under latent-mixture heterogeneity using one shared simulation protocol. This is intentionally a \emph{{neutral comparison}} paper: we evaluate log-rank, FH-weighted tests, MaxCombo, Cox PH, and RMST procedures on equal footing, rather than framing the analysis as advocacy for a single method class.
+
+The results support three interpretation points. First, method ranking is regime-dependent, so no single procedure dominates uniformly across all design cells. Second, the strict-null benchmark shows that log-rank and other primary methods, including MaxCombo through \texttt{{pmult}}, are close to nominal type-I-error calibration within Monte Carlo uncertainty. Third, RMST and weighted tests provide clinically or mechanistically meaningful contrasts in specific regimes, but their gains should be interpreted jointly with calibration behavior and follow-up context.
+
+Important limitations remain. The current protocol omits accrual and administrative censoring, relies on exponential baseline hazards, and does not include full weighted-Cox/AHR or flexible parametric model implementations in the primary comparison set despite their relevance in the broader NPH literature \citep{{schemper2009,royston2002}}. Replication size was fixed at 200 per cell in the main grid, which is sufficient for broad ranking patterns but not for ultra-precise tail calibration.
+
+Next steps for manuscript evolution are straightforward: add accrual-based designs, extend baseline hazard shapes, include direct AHR/flexible-parametric comparators, and stress-test conclusions under alternative follow-up windows. Because all scenario-level outputs are recoverable, these extensions can be layered onto the current framework without changing the core reporting logic.
 
 \section{{Conclusions}}
-A full-grid simulation plus strict-null benchmark provides a submission-ready basis for method comparison under latent-mixture-induced marginal NPH. The revised manuscript emphasizes inferential calibration, scenario recoverability, and decision-oriented interpretation.
+A full-grid simulation with explicit strict-null benchmarking provides a transparent basis for comparing survival methods under latent-mixture-induced marginal NPH. The revised manuscript positions the contribution as a neutral methodological comparison, highlights calibration and regime dependence, and preserves reproducible scenario-level traceability for downstream extensions.
 
 \nocite{{*}}
 \bibliographystyle{{plainnat}}

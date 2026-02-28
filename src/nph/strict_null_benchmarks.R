@@ -52,7 +52,22 @@ analyze_one <- function(d) {
   out$wlr_fh01_p <- weighted_logrank_p(d, 0, 1)
   out$wlr_fh11_p <- weighted_logrank_p(d, 1, 1)
   out$wlr_fh10_p <- weighted_logrank_p(d, 1, 0)
-  out$maxcombo_p <- min(1, 4 * min(c(out$wlr_fh00_p, out$wlr_fh01_p, out$wlr_fh11_p, out$wlr_fh10_p)))
+
+  if (requireNamespace('nph', quietly = TRUE)) {
+    mc <- try(nph::logrank.maxtest(
+      time = d$time,
+      event = d$status,
+      group = d$arm,
+      alternative = 'two.sided',
+      rho = c(0, 0, 1, 1),
+      gamma = c(0, 1, 1, 0)
+    ), silent = TRUE)
+    out$maxcombo_p <- if (!inherits(mc, 'try-error')) as.numeric(mc$pmult) else NA_real_
+    out$maxcombo_bonf_p <- if (!inherits(mc, 'try-error')) as.numeric(mc$p.Bonf) else NA_real_
+  } else {
+    out$maxcombo_p <- NA_real_
+    out$maxcombo_bonf_p <- NA_real_
+  }
 
   cf <- try(coxph(Surv(time, status) ~ arm, data = d), silent = TRUE)
   out$cox_p <- if (!inherits(cf, 'try-error')) summary(cf)$coef[1, 5] else NA_real_
@@ -86,7 +101,7 @@ run_one_scenario <- function(sc, R = 2000, cores = 2, base_seed = 20260228L) {
   rows <- if (cores > 1) mclapply(seeds, one, mc.cores = cores) else lapply(seeds, one)
   rows <- do.call(rbind, rows)
 
-  methods <- c('logrank_p', 'wlr_fh00_p', 'wlr_fh01_p', 'wlr_fh11_p', 'wlr_fh10_p', 'maxcombo_p', 'cox_p', 'rmst12_p')
+  methods <- c('logrank_p', 'wlr_fh00_p', 'wlr_fh01_p', 'wlr_fh11_p', 'wlr_fh10_p', 'maxcombo_p', 'maxcombo_bonf_p', 'cox_p', 'rmst12_p')
   out <- list(
     scenario_id = sc$scenario_id,
     n_total = sc$n_total,
