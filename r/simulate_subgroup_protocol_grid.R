@@ -1,4 +1,26 @@
 #!/usr/bin/env Rscript
+resolve_repo_root <- function() {
+  file_arg <- "--file="
+  cmd_args <- commandArgs(trailingOnly = FALSE)
+  script_arg <- cmd_args[grep(paste0("^", file_arg), cmd_args)]
+  if (length(script_arg) > 0) {
+    script_path <- normalizePath(sub(file_arg, "", script_arg[1]), winslash = "/", mustWork = TRUE)
+    return(normalizePath(file.path(dirname(script_path), ".."), winslash = "/", mustWork = TRUE))
+  }
+
+  frame_files <- vapply(sys.frames(), function(x) if (!is.null(x$ofile)) x$ofile else "", character(1))
+  frame_files <- frame_files[nzchar(frame_files)]
+  if (length(frame_files) > 0) {
+    script_path <- normalizePath(frame_files[1], winslash = "/", mustWork = TRUE)
+    return(normalizePath(file.path(dirname(script_path), ".."), winslash = "/", mustWork = TRUE))
+  }
+
+  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+}
+
+repo_root <- resolve_repo_root()
+setwd(repo_root)
+
 suppressPackageStartupMessages({
   library(survival)
   library(parallel)
