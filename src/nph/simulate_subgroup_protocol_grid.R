@@ -104,21 +104,48 @@ truth_values <- function(prev, lambda0, hr_pos, hr_neg) {
 }
 
 summarise_scenario <- function(rows, truth, alpha=0.05) {
+  R <- nrow(rows)
   pcols <- c('logrank_p','wlr_fh00_p','wlr_fh01_p','wlr_fh11_p','wlr_fh10_p','maxcombo_p','cox_p','rmst6_p','rmst12_p')
+
+  mcse_p <- function(p, R) sqrt(pmax(p * (1 - p), 0) / R)
+  mcse_bias <- function(bias, mse, R) sqrt(pmax(mse - bias^2, 0) / R)
+
   out <- list()
-  for (pc in pcols) out[[paste0(pc,'_reject')]] <- mean(rows[[pc]] < alpha, na.rm=TRUE)
-  out$cox_hr_bias <- mean(rows$cox_hr - truth['true_hr_mix'], na.rm=TRUE)
-  out$cox_hr_mse  <- mean((rows$cox_hr - truth['true_hr_mix'])^2, na.rm=TRUE)
-  out$rmst6_bias <- mean(rows$rmst6_diff - truth['true_rmst6'], na.rm=TRUE)
-  out$rmst6_mse  <- mean((rows$rmst6_diff - truth['true_rmst6'])^2, na.rm=TRUE)
-  out$rmst12_bias <- mean(rows$rmst12_diff - truth['true_rmst12'], na.rm=TRUE)
-  out$rmst12_mse  <- mean((rows$rmst12_diff - truth['true_rmst12'])^2, na.rm=TRUE)
-  out$mile6_bias <- mean(rows$mile6_diff - truth['true_mile6'], na.rm=TRUE)
-  out$mile12_bias <- mean(rows$mile12_diff - truth['true_mile12'], na.rm=TRUE)
+  for (pc in pcols) {
+    pr <- mean(rows[[pc]] < alpha, na.rm=TRUE)
+    out[[paste0(pc,'_reject')]] <- pr
+    out[[paste0(pc,'_reject_mcse')]] <- mcse_p(pr, R)
+  }
+
+  cox_delta <- rows$cox_hr - truth['true_hr_mix']
+  out$cox_hr_bias <- mean(cox_delta, na.rm=TRUE)
+  out$cox_hr_mse  <- mean(cox_delta^2, na.rm=TRUE)
+  out$cox_hr_bias_mcse <- mcse_bias(out$cox_hr_bias, out$cox_hr_mse, R)
+
+  r6_delta <- rows$rmst6_diff - truth['true_rmst6']
+  out$rmst6_bias <- mean(r6_delta, na.rm=TRUE)
+  out$rmst6_mse  <- mean(r6_delta^2, na.rm=TRUE)
+  out$rmst6_bias_mcse <- mcse_bias(out$rmst6_bias, out$rmst6_mse, R)
+
+  r12_delta <- rows$rmst12_diff - truth['true_rmst12']
+  out$rmst12_bias <- mean(r12_delta, na.rm=TRUE)
+  out$rmst12_mse  <- mean(r12_delta^2, na.rm=TRUE)
+  out$rmst12_bias_mcse <- mcse_bias(out$rmst12_bias, out$rmst12_mse, R)
+
+  m6_delta <- rows$mile6_diff - truth['true_mile6']
+  out$mile6_bias <- mean(m6_delta, na.rm=TRUE)
+  out$mile6_mse  <- mean(m6_delta^2, na.rm=TRUE)
+  out$mile6_bias_mcse <- mcse_bias(out$mile6_bias, out$mile6_mse, R)
+
+  m12_delta <- rows$mile12_diff - truth['true_mile12']
+  out$mile12_bias <- mean(m12_delta, na.rm=TRUE)
+  out$mile12_mse  <- mean(m12_delta^2, na.rm=TRUE)
+  out$mile12_bias_mcse <- mcse_bias(out$mile12_bias, out$mile12_mse, R)
+
   as.data.frame(out)
 }
 
-run <- function(replications=200, cores=max(1, detectCores()-1), out='results/subgroup_protocol_grid_summary.csv') {
+run <- function(replications=200, cores=max(1, detectCores()-1), out='results/subgroup_protocol_grid_summary.csv', base_seed=20260228L, max_cells=NULL) {
   lambda0_levels <- c(log(2)/36, log(2)/12, log(2)/6)
   cens_props <- c(0.0, 0.1, 0.3)
   prev_levels <- c(0.1,0.3,0.5)
@@ -131,6 +158,9 @@ run <- function(replications=200, cores=max(1, detectCores()-1), out='results/su
   grid <- grid[order(grid$n_total, grid$lambda0, grid$cens_prop, grid$prev, grid$hr_overall, grid$rel), ]
   rownames(grid) <- NULL
   grid$scenario_id <- seq_len(nrow(grid))
+  if (!is.null(max_cells)) {
+    grid <- head(grid, as.integer(max_cells))
+  }
 
   dir.create(dirname(out), recursive=TRUE, showWarnings=FALSE)
   results <- list()
@@ -144,6 +174,7 @@ run <- function(replications=200, cores=max(1, detectCores()-1), out='results/su
 
     truth <- truth_values(g$prev,g$lambda0,hr_pos,hr_neg)
 
+    set.seed(base_seed + as.integer(g$scenario_id))
     seeds <- sample.int(1e9, replications)
     one <- function(sd) {
       set.seed(sd)
@@ -181,8 +212,13 @@ run <- function(replications=200, cores=max(1, detectCores()-1), out='results/su
   cat('Wrote', out, '\n')
 }
 
-args <- commandArgs(trailingOnly=TRUE)
-replications <- ifelse(length(args)>=1, as.integer(args[1]), 200)
-cores <- ifelse(length(args)>=2, as.integer(args[2]), max(1, detectCores()-1))
-out <- ifelse(length(args)>=3, args[3], 'results/subgroup_protocol_grid_summary.csv')
-run(replications, cores, out)
+if (sys.nframe() == 0) {
+  args <- commandArgs(trailingOnly=TRUE)
+  replications <- ifelse(length(args)>=1, as.integer(args[1]), 200)
+  cores <- ifelse(length(args)>=2, as.integer(args[2]), max(1, detectCores()-1))
+  out <- ifelse(length(args)>=3, args[3], 'results/subgroup_protocol_grid_summary.csv')
+  base_seed <- ifelse(length(args)>=4, as.integer(args[4]), 20260228L)
+  max_cells <- ifelse(length(args)>=5, as.integer(args[5]), NA_integer_)
+  if (is.na(max_cells)) max_cells <- NULL
+  run(replications, cores, out, base_seed, max_cells)
+}
