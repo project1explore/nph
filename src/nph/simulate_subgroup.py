@@ -201,13 +201,18 @@ def run_scenario(sc: Scenario, outdir: str, max_minutes: float, n_sims: int | No
     return summary
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--outdir", default="results")
     parser.add_argument("--max-minutes", type=float, default=25.0)
     parser.add_argument("--n-sims", type=int, default=None)
     parser.add_argument("--seed", type=int, default=20260227)
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     scenarios = [
         Scenario("null", n_total=400, prevalence=0.3, lambda_control=0.12, hr_pos=1.0, hr_neg=1.0, censor_rate=0.05),

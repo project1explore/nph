@@ -1,25 +1,45 @@
 # NPH
 
-Simulation project for the **non-proportional hazards subgroup scenario** based on the uploaded CONFIRMS protocol.
+Simulation project for non-proportional hazards (NPH) subgroup scenarios.
 
-## What is included
-
-- Parallel simulation engine (`src/nph/simulate_subgroup.py`)
-- Runtime-aware auto sizing of simulation runs (keeps runtime under configured budget)
-- JSON summaries in `results/`
-- LaTeX report generator (`scripts/make_report.py`)
-
-## Run
+## Setup
 
 ```bash
-cd /home/vboxuser/Documents/NPH
-python3 src/nph/simulate_subgroup.py --max-minutes 25 --outdir results
-python3 scripts/make_report.py
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
-Compile report (if `pdflatex` is installed):
+(Optional dev tools)
 
 ```bash
-cd reports
-pdflatex report.tex
+pip install -e .[dev]
 ```
+
+## Usage
+
+Run simulations:
+
+```bash
+nph-simulate --max-minutes 25 --outdir results
+```
+
+Generate the default report:
+
+```bash
+nph-make-report
+```
+
+You can also use the module CLI directly:
+
+```bash
+python -m nph.cli --help
+python -m nph.cli simulate --max-minutes 25 --outdir results
+python -m nph.cli make-report
+```
+
+## Notes
+
+- Simulation implementation lives in `src/nph/simulate_subgroup.py`.
+- Report scripts live in `scripts/`.
+- Outputs are written to `results/` and `reports/`.

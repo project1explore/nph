@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-root = Path('/home/vboxuser/Documents/NPH')
+root = Path(__file__).resolve().parents[1]
 full_csv = root / 'results' / 'subgroup_protocol_grid_summary_full.csv'
 strict_csv = root / 'results' / 'strict_null_benchmark.csv'
 out_tex = root / 'reports' / 'paper_subgroup_protocol_full.tex'

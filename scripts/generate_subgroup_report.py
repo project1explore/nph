@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-root = Path('/home/vboxuser/Documents/NPH')
+root = Path(__file__).resolve().parents[1]
 res = root / 'results' / 'subgroup_methods_summary.csv'
 figdir = root / 'reports' / 'figures'
 figdir.mkdir(parents=True, exist_ok=True)

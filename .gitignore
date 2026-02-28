@@ -1,3 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
 reports/*.aux
 reports/*.log
 reports/*.bbl

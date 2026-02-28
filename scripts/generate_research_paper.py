@@ -2,7 +2,7 @@
 from pathlib import Path
 import pandas as pd
 
-root = Path('/home/vboxuser/Documents/NPH')
+root = Path(__file__).resolve().parents[1]
 df = pd.read_csv(root/'results'/'subgroup_methods_summary.csv')
 
 rows = []
