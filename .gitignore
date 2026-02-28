@@ -1,0 +1,6 @@
+reports/*.aux
+reports/*.log
+reports/*.bbl
+reports/*.blg
+reports/*.out
+reports/*.toc
