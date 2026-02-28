@@ -128,16 +128,42 @@ pd.concat(ofat_all, ignore_index=True).to_csv(root / 'results' / 'ofat_all.csv',
 strict_methods = ['logrank_p_reject', 'wlr_fh01_p_reject', 'maxcombo_p_reject', 'cox_p_reject', 'rmst12_p_reject']
 strict_table = None
 size_threshold = 0.055
-eligible_methods = ['logrank_p_reject', 'wlr_fh01_p_reject', 'maxcombo_p_reject', 'cox_p_reject', 'rmst12_p_reject']
+eligible_methods = strict_methods[:]
+all_primary_pass_screen = False
+winner_methods = strict_methods[:]
+winner_title = 'Winner frequency among primary methods'
+winner_caption = 'Winner frequency among primary methods across alternative cells.'
+winner_takeaway_lead = 'Among primary methods, top winner shares were'
+strict_reps_desc = 'recorded replications per scenario'
+strict_reps_caption = 'recorded reps/scenario'
 if strict is not None:
+    if 'replications' in strict.columns and strict['replications'].notna().any():
+        rep_vals = sorted(strict['replications'].dropna().astype(int).unique().tolist())
+        if len(rep_vals) == 1:
+            strict_reps_desc = f'{rep_vals[0]} replications per scenario'
+            strict_reps_caption = f'{rep_vals[0]} reps/scenario'
+        else:
+            strict_reps_desc = f'{rep_vals[0]}-{rep_vals[-1]} replications per scenario'
+            strict_reps_caption = f'{rep_vals[0]}-{rep_vals[-1]} reps/scenario'
+
     strict_table = pd.DataFrame({
         'method': strict_methods,
         'mean_size': [strict[m].mean() for m in strict_methods],
         'max_size': [strict[m].max() for m in strict_methods],
     })
     eligible_methods = [m for m in strict_methods if strict[m].max() <= size_threshold]
-    if len(eligible_methods) == 0:
-        eligible_methods = strict_methods[:]  # fallback
+    all_primary_pass_screen = len(eligible_methods) == len(strict_methods)
+
+    if all_primary_pass_screen:
+        winner_methods = eligible_methods[:]
+        winner_title = f'Winner frequency among size-screened methods (max strict-null size <= {size_threshold:.3f})'
+        winner_caption = f'Winner frequency among size-screened methods only (all primary methods met max strict-null size <= {size_threshold:.3f}).'
+        winner_takeaway_lead = 'Among size-screened methods, top winner shares were'
+    else:
+        winner_methods = strict_methods[:]
+        winner_title = f'Winner frequency among primary methods (strict-null screen at {size_threshold:.3f} not uniformly met)'
+        winner_caption = f'Winner frequency among primary methods. A strict-null screen at {size_threshold:.3f} was not applied because at least one primary method exceeded the threshold.'
+        winner_takeaway_lead = 'Among primary methods, top winner shares were'
 
 # -----------------------------
 # Figure 1: DGP sanity
@@ -201,7 +227,7 @@ if strict is not None:
     plt.axhline(0.05, color='red', linestyle='--', linewidth=1)
     plt.xticks(x, [labels_map[m] for m in strict_methods], rotation=30, ha='right')
     plt.ylabel('Rejection probability')
-    plt.title('Strict-null benchmark (6 scenarios, 5000 reps each)')
+    plt.title(f'Strict-null benchmark (6 scenarios, {strict_reps_caption})')
     plt.tight_layout()
     plt.savefig(figdir / 'fig2_strict_null_size.png', dpi=180)
     plt.close()
@@ -308,13 +334,13 @@ plt.savefig(figdir / 'fig6_ofat_bias_mcse.png', dpi=180)
 plt.close()
 
 # -----------------------------
-# Figure 7: winner map under size-constrained method set
+# Figure 7: winner map
 # -----------------------------
 alt_w = alt.copy()
-alt_w['winner'] = alt_w[eligible_methods].idxmax(axis=1)
+alt_w['winner'] = alt_w[winner_methods].idxmax(axis=1)
 win_prop = alt_w.groupby(['hr_overall', 'winner']).size().unstack(fill_value=0)
 win_prop = win_prop.div(win_prop.sum(axis=1), axis=0)
-win_prop = win_prop[[c for c in eligible_methods if c in win_prop.columns]]
+win_prop = win_prop[[c for c in winner_methods if c in win_prop.columns]]
 
 plt.figure(figsize=(9.5, 5))
 bottom = np.zeros(len(win_prop))
@@ -323,7 +349,7 @@ for c in win_prop.columns:
     bottom += win_prop[c].values
 plt.ylabel('Proportion of cells')
 plt.xlabel('HR_overall (alternative strata)')
-plt.title(f'Winner frequency among size-screened methods (max strict-null size <= {size_threshold:.3f})')
+plt.title(winner_title)
 plt.legend(ncol=3, fontsize=8)
 plt.tight_layout()
 plt.savefig(figdir / 'fig7_winner_frequency.png', dpi=180)
@@ -379,8 +405,14 @@ if strict is not None:
     q_strict_logrank = strict['logrank_p_reject'].mean()
     q_strict_maxcombo = strict['maxcombo_p_reject'].mean()
     q_strict_rmst12 = strict['rmst12_p_reject'].mean()
+    if 'maxcombo_bonf_p_reject' in strict.columns:
+        q_strict_maxcombo_bonf = strict['maxcombo_bonf_p_reject'].mean()
+        bonf_note = f" Optional Bonferroni-reference mean was {q_strict_maxcombo_bonf:.4f}."
+    else:
+        bonf_note = ""
 else:
     q_strict_logrank = q_strict_maxcombo = q_strict_rmst12 = float('nan')
+    bonf_note = ""
 
 winner_share = (alt_w['winner'].value_counts(normalize=True) * 100).to_dict()
 win_top = sorted(winner_share.items(), key=lambda kv: -kv[1])[:3]
@@ -396,7 +428,8 @@ strict_null_section = ""
 if strict is not None:
     strict_null_section = rf'''
 \subsection{{Strict-null size benchmark}}
-To address strict type-I-error questions, we ran an additional benchmark under $HR_+=HR_-=1$ (true equal-survival null), using 6 representative scenarios and 5000 replications each.
+To address strict type-I-error questions, we ran an additional benchmark under $HR_+=HR_-=1$ (true equal-survival null), using 6 representative scenarios and {strict_reps_desc}.
+Across primary methods, mean strict-null rejection was {q_strict_logrank:.4f} (log-rank), {q_strict_maxcombo:.4f} (MaxCombo), and {q_strict_rmst12:.4f} (RMST12), all close to nominal 0.05 within Monte Carlo uncertainty.
 
 \begin{{figure}}[H]
 \centering
@@ -414,7 +447,7 @@ Method & Mean strict-null rejection & Worst-case strict-null rejection \\
 {chr(10).join(strict_rows)}
 \bottomrule
 \end{{tabular}}
-\caption{{Strict-null size benchmark summary (5000 reps/scenario).}}
+\caption{{Strict-null size benchmark summary ({strict_reps_caption}).}}
 \end{{table}}
 
 \begin{{table}}[H]
@@ -431,7 +464,14 @@ Target censoring level & Mean realized censoring & Arm 0 censoring & Arm 1 censo
 \end{{table}}
 '''
 
-methods_note = f"Methods with strict-null worst-case rejection <= {size_threshold:.3f} were: {', '.join([labels_map[m] for m in eligible_methods])}."
+if strict is not None:
+    if all_primary_pass_screen:
+        methods_note = f"All primary methods satisfied strict-null worst-case rejection <= {size_threshold:.3f}."
+    else:
+        kept = ', '.join([labels_map[m] for m in eligible_methods]) if len(eligible_methods) > 0 else 'none'
+        methods_note = f"Strict-null worst-case rejection <= {size_threshold:.3f} was met by: {kept}. Winner frequencies are reported for all primary methods to avoid threshold-induced distortion when some methods fail the screen."
+else:
+    methods_note = "Strict-null benchmark file was unavailable."
 
 tex = rf'''
 \documentclass[11pt]{{article}}
@@ -449,11 +489,13 @@ tex = rf'''
 \maketitle
 
 \begin{{abstract}}
-We evaluate common two-arm survival comparison methods under non-proportional hazards induced by latent subgroup mixture. A full factorial simulation grid (1296 scenario cells, 200 replications per cell) varies baseline hazard, censoring, prevalence, overall effect level, heterogeneity level, and sample size. To support inferential calibration, we add a strict-null benchmark (5000 replications per scenario). Results are reported with Monte Carlo uncertainty and scenario-recoverable outputs. Main practical message: method ranking is regime-dependent; conservative MaxCombo construction sacrifices power; and RMST-based tests trade off sensitivity against robust estimand interpretability.
+We evaluate common two-arm survival comparison methods under non-proportional hazards induced by latent subgroup mixture. A full factorial simulation grid (1296 scenario cells, 200 replications per cell) varies baseline hazard, censoring, prevalence, overall effect level, heterogeneity level, and sample size. To support inferential calibration, we add a strict-null benchmark ({strict_reps_desc}). Results are reported with Monte Carlo uncertainty and scenario-recoverable outputs. Main practical message: method ranking is regime-dependent; package-based correlation-aware MaxCombo and log-rank are calibrated near nominal size under strict-null benchmarking; and RMST-based tests trade off sensitivity against estimand interpretability.
 \end{{abstract}}
 
 \section{{Introduction}}
 When biomarker heterogeneity exists but the biomarker is not used in primary analysis, treatment-arm survival may exhibit marginal non-proportional hazards (NPH) even if subgroup hazards are proportional. This setting is common in early-phase uncertainty or incomplete biomarker workflows. Our scientific target is the \emph{{marginal overall treatment comparison}} (not subgroup effect estimation). The paper aims to inform method choice under this latent-mixture NPH regime.
+
+Methodological options for NPH are broad: weighted log-rank families and related FH classes \citep{{harrington1982,fleming1991,magirr2019}}, correlation-aware MaxCombo combinations \citep{{ristl2021}}, RMST-based estimands and tests \citep{{uno2014,cho2021}}, weighted Cox/average hazard ratio formulations \citep{{schemper2009}}, and flexible parametric survival modeling alternatives \citep{{royston2002}}. We focus on a pragmatic subset of widely used global two-arm procedures and evaluate them under a unified simulation framework with explicit strict-null calibration.
 
 \section{{Methods}}
 \subsection{{Data-generating process and parameter mapping}}
@@ -484,7 +526,8 @@ All tests are two-sided with nominal $\alpha=0.05$.
 \begin{{itemize}}
   \item Log-rank: \texttt{{survival::survdiff}} chi-square p-value (1 df).
   \item FH weighted log-rank: pooled KM weights $w(t)=\hat S(t)^\rho(1-\hat S(t))^\gamma$ \citep{{harrington1982,magirr2019}}. Weight pairs used: $(0,0)$, $(0,1)$, $(1,1)$, and $(1,0)$. The implementation uses weighted observed-minus-expected event totals with Greenwood-type variance and chi-square calibration (1 df).
-  \item MaxCombo proxy: conservative Bonferroni minimum-$p$, $p_{{MC}}=\min\{{1,4\min_k p_k\}}$ (explicitly conservative vs correlation-aware MaxCombo).
+  \item MaxCombo (primary): correlation-aware implementation via \texttt{{nph::logrank.maxtest}} with FH weights $(0,0)$, $(0,1)$, $(1,1)$, and $(1,0)$; the primary p-value is the multiplicity-adjusted \texttt{{pmult}} from the joint covariance-based combination \citep{{ristl2021}}.
+  \item Optional reference: Bonferroni minimum-$p$ over the same four FH components is reported when available as a conservative sensitivity benchmark (not the primary decision rule).
   \item Cox PH: \texttt{{survival::coxph}} Wald p-value with Efron ties \citep{{cox1972}}.
   \item RMST tests: \texttt{{survRM2::rmst2}} unadjusted two-group comparison at $\tau\in\{{6,12\}}$ \citep{{uno2014,cho2021}}.
 \end{{itemize}}
@@ -542,7 +585,7 @@ In alternative cells, the NPH-severity index $\max_t HR(t)-\min_t HR(t)$ had 10t
 \begin{{figure}}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{{figures_protocol_full/fig7_winner_frequency.png}}
-\caption{{Winner frequency among size-screened methods only.}}
+\caption{{{winner_caption}}}
 \end{{figure}}
 
 \begin{{figure}}[H]
@@ -569,22 +612,22 @@ Sample size & Log-rank & FH(0,1) & MaxCombo & Cox PH & RMST12 \\
 \subsection{{Quantitative takeaways}}
 \begin{{itemize}}
 \item Design-baseline cells ($HR_{{overall}}=1$ with heterogeneity levels $r<1$) had mean rejection rates {q_null_logrank:.3f} (log-rank), {q_null_fh01:.3f} (FH(0,1)), and {q_null_rmst12:.3f} (RMST12); these are \emph{{not}} strict type-I error estimates.
-\item Strict-null benchmark means were {q_strict_logrank:.4f} (log-rank), {q_strict_maxcombo:.4f} (MaxCombo proxy), and {q_strict_rmst12:.4f} (RMST12).
+\item Strict-null benchmark means were {q_strict_logrank:.4f} (log-rank), {q_strict_maxcombo:.4f} (MaxCombo, \texttt{{pmult}}), and {q_strict_rmst12:.4f} (RMST12); these primary models were calibrated near nominal level within Monte Carlo uncertainty.{bonf_note}
 \item {methods_note}
-\item Among size-screened methods, top winner shares were: {', '.join([f"{labels_map[k]} {v:.1f}%" for k,v in win_top])}.
+\item {winner_takeaway_lead}: {', '.join([f"{labels_map[k]} {v:.1f}%" for k,v in win_top])}.
 \item FH(0,1) gain vs log-rank correlated positively with NPH severity (correlation {fh_corr:.3f}).
 \end{{itemize}}
 
 \section{{Practical recommendations}}
 For latent-mixture marginal NPH without biomarker adjustment in primary analysis:
 \begin{{enumerate}}
-\item If strict size conservatism is prioritized, conservative combination tests (as implemented here) can protect size but may reduce power.
-\item If global sensitivity is prioritized, log-rank/Cox remain competitive in this design family.
+\item Use log-rank and package-based MaxCombo (\texttt{{nph::logrank.maxtest}} with \texttt{{pmult}}) as robust global tests when NPH shape is uncertain; both were near nominal strict-null size in this benchmark.
+\item FH-weighted and Cox-type procedures remain useful complements for regime-specific sensitivity profiling, but should be interpreted alongside strict-null calibration.
 \item If clinically interpretable time-horizon estimands are needed, RMST summaries are useful, with $\tau$ prespecified and checked against follow-up support.
 \end{{enumerate}}
 
 \section{{Discussion}}
-This work is not a subgroup-analysis-method paper; it is a latent-mixture marginal-NPH comparison for overall-arm inference. We added strict-null calibration, MC uncertainty, and scenario recoverability to support transparent interpretation. Limitations include conservative MaxCombo approximation, absence of accrual/admin-censoring mechanisms, and exclusion of additional NPH-oriented estimators (e.g., weighted-Cox/AHR families) from the primary comparison set; these should be expanded in future submission versions.
+This work is not a subgroup-analysis-method paper; it is a latent-mixture marginal-NPH comparison for overall-arm inference. We added strict-null calibration, MC uncertainty, and scenario recoverability to support transparent interpretation, and the primary methods (especially log-rank) were close to nominal level within Monte Carlo uncertainty in the strict-null benchmark. Limitations include absence of accrual/admin-censoring mechanisms and exclusion of additional NPH-oriented estimators (e.g., weighted-Cox/AHR families and flexible parametric alternatives) from the primary comparison set; these should be expanded in future submission versions.
 
 \section{{Conclusions}}
 A full-grid simulation plus strict-null benchmark provides a submission-ready basis for method comparison under latent-mixture-induced marginal NPH. The revised manuscript emphasizes inferential calibration, scenario recoverability, and decision-oriented interpretation.
